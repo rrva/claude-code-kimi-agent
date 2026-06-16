@@ -4,9 +4,9 @@
 
 # Kimi Code Agent for Claude Code
 
-Delegate coding tasks from **Claude Code** to the **[Kimi Code CLI](https://github.com/MoonshotAI/kimi-code)** — run Kimi as a plugin subagent without patching Claude Code. Ask Claude to spawn a Kimi agent to implement, review, explore, or debug, and Kimi's result (plus a resume command) comes back into your session.
+Delegate coding tasks from **Claude Code** to the **[Kimi Code CLI](https://github.com/MoonshotAI/kimi-code)** — run Kimi as a plugin subagent. Ask Claude to spawn a Kimi agent to implement, review, explore, or debug, and Kimi's result (plus a resume command) comes back into your session.
 
-Built entirely on official surfaces — no host-file edits, no forks:
+Built on:
 
 - Claude Code plugins, skills, and subagents
 - Kimi Code CLI non-interactive prompt mode: `kimi -p "<task>" --output-format stream-json`
