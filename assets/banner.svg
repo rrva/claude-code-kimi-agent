@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 250" width="820" height="250" role="img" aria-label="Kimi Code Agent for Claude Code — run Kimi Code as a Claude Code subagent">
+  <defs>
+    <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0c1224"/>
+      <stop offset="1" stop-color="#141c33"/>
+    </linearGradient>
+    <linearGradient id="wire" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#d97757"/>
+      <stop offset="1" stop-color="#7c8cf8"/>
+    </linearGradient>
+  </defs>
+
+  <style>
+    .ui   { font-family: 'Segoe UI', Helvetica, Arial, sans-serif; }
+    .mono { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace; }
+    .dotR { animation: flowR 2.6s linear infinite; }
+    .dotL { animation: flowL 2.6s linear infinite; }
+    .a2 { animation-delay: .87s; }
+    .a3 { animation-delay: 1.74s; }
+    .b2 { animation-delay: 1.3s; }
+    .cursor    { animation: blink 1.05s steps(1) infinite; }
+    .underline { stroke-dasharray: 214; stroke-dashoffset: 214; animation: draw 1.3s ease-out .25s forwards; }
+    .bus       { animation: hum 2.6s ease-in-out infinite; }
+    @keyframes flowR { 0% { transform: translateX(0); opacity: 0 } 8% { opacity: 1 } 90% { opacity: 1 } 100% { transform: translateX(352px); opacity: 0 } }
+    @keyframes flowL { 0% { transform: translateX(0); opacity: 0 } 10% { opacity: 1 } 90% { opacity: 1 } 100% { transform: translateX(-352px); opacity: 0 } }
+    @keyframes blink { 0%, 50% { opacity: 1 } 51%, 100% { opacity: 0 } }
+    @keyframes draw  { to { stroke-dashoffset: 0 } }
+    @keyframes hum   { 0%, 100% { opacity: .25 } 50% { opacity: .6 } }
+  </style>
+
+  <rect x="8" y="8" width="804" height="234" rx="18" fill="url(#panel)" stroke="#26304d"/>
+
+  <text class="ui" x="410" y="70" text-anchor="middle" font-size="33" font-weight="700" fill="#ffffff">Kimi Code Agent</text>
+  <line class="underline" x1="303" y1="84" x2="517" y2="84" stroke="url(#wire)" stroke-width="3" stroke-linecap="round"/>
+  <text class="ui" x="410" y="110" text-anchor="middle" font-size="14.5" fill="#9aa6c2">Run Kimi Code as a Claude Code subagent — delegate, run, resume, stream</text>
+
+  <line class="bus" x1="232" y1="165" x2="588" y2="165" stroke="#39446b" stroke-width="2" stroke-dasharray="2 7" stroke-linecap="round"/>
+
+  <rect x="70" y="141" width="160" height="48" rx="11" fill="#d97757" fill-opacity="0.14" stroke="#d97757"/>
+  <text class="ui" x="150" y="171" text-anchor="middle" font-size="15.5" font-weight="600" fill="#f4c3ac">Claude Code</text>
+
+  <rect x="590" y="141" width="160" height="48" rx="11" fill="#7c8cf8" fill-opacity="0.14" stroke="#7c8cf8"/>
+  <text class="mono" x="670" y="171" text-anchor="middle" font-size="16" font-weight="600" fill="#c3cbff">kimi</text>
+
+  <g fill="#d97757">
+    <circle class="dotR" cx="238" cy="160" r="5"/>
+    <circle class="dotR a2" cx="238" cy="160" r="5"/>
+    <circle class="dotR a3" cx="238" cy="160" r="5"/>
+  </g>
+  <g fill="#7c8cf8">
+    <circle class="dotL" cx="582" cy="170" r="4"/>
+    <circle class="dotL b2" cx="582" cy="170" r="4"/>
+  </g>
+
+  <text class="mono" x="72" y="223" font-size="14" fill="#cdd6f0">$ kimi <tspan fill="#7c8cf8">-p</tspan> <tspan fill="#86d2a8">"review the current diff"</tspan></text>
+  <rect class="cursor" x="362" y="212" width="8" height="13" fill="#86d2a8"/>
+</svg>

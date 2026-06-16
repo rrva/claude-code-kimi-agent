@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/banner.svg" alt="Kimi Code Agent for Claude Code" width="820">
+</p>
+
 # Kimi Code Agent for Claude Code
 
 Delegate coding tasks from **Claude Code** to the **[Kimi Code CLI](https://github.com/MoonshotAI/kimi-code)** — run Kimi as a plugin subagent without patching Claude Code. Ask Claude to spawn a Kimi agent to implement, review, explore, or debug, and Kimi's result (plus a resume command) comes back into your session.
