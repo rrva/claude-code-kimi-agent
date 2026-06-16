@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "description": "Run Kimi Code CLI as a Claude Code plugin subagent through the official Kimi CLI.",
   "author": {
-    "name": "Moonshot AI"
+    "name": "Ragnar Rova"
   },
   "keywords": ["kimi", "kimi-code", "agent", "subagent", "coding-agent"],
-  "homepage": "https://github.com/MoonshotAI/kimi-code",
-  "repository": "https://github.com/MoonshotAI/kimi-code",
+  "homepage": "https://github.com/rrva/claude-code-kimi-agent",
+  "repository": "https://github.com/rrva/claude-code-kimi-agent",
   "license": "MIT"
 }

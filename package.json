@@ -1,0 +1,20 @@
+{
+  "name": "claude-code-kimi-agent",
+  "version": "0.1.0",
+  "description": "Claude Code plugin that delegates coding tasks to the Kimi Code CLI as a subagent.",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "kimi-agent-run": "bin/kimi-agent-run"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "author": "Ragnar Rova",
+  "homepage": "https://github.com/rrva/claude-code-kimi-agent",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rrva/claude-code-kimi-agent.git"
+  }
+}

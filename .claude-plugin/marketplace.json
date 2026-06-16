@@ -2,7 +2,7 @@
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "kimi-code",
   "owner": {
-    "name": "Moonshot AI"
+    "name": "Ragnar Rova"
   },
   "metadata": {
     "description": "Claude Code plugins for Kimi Code.",
@@ -15,10 +15,10 @@
       "description": "Run Kimi Code CLI as a Claude Code plugin subagent through the official Kimi CLI.",
       "version": "0.1.0",
       "author": {
-        "name": "Moonshot AI"
+        "name": "Ragnar Rova"
       },
-      "homepage": "https://github.com/MoonshotAI/kimi-code",
-      "repository": "https://github.com/MoonshotAI/kimi-code",
+      "homepage": "https://github.com/rrva/claude-code-kimi-agent",
+      "repository": "https://github.com/rrva/claude-code-kimi-agent",
       "license": "MIT",
       "category": "development",
       "keywords": ["kimi", "kimi-code", "agent", "subagent", "coding-agent"]
