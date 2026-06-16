@@ -18,7 +18,7 @@ Use the official Kimi Code CLI prompt mode only. The helper runs:
 - `kimi -p "<task>" --output-format stream-json` for execution
 - optional official resume flags such as `--continue` or `--session <id>` when explicitly needed
 
-Do not add `--yolo`, `--auto`, or `--plan` to prompt-mode runs. Kimi prompt mode uses auto permission internally and rejects those flag combinations.
+Do not add `--yolo`, `--auto`, or `--plan` to prompt-mode runs. Kimi prompt mode already runs with auto permission — every file, shell, and network action is auto-approved with no prompt — so there is nothing to escalate, and `kimi -p` rejects those flags (exit 1). This holds regardless of the parent Claude Code session's permission mode, including bypass-permissions; there is no yolo level above prompt-mode auto to switch into.
 
 Invocation pattern:
 
