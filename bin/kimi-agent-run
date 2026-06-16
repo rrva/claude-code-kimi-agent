@@ -160,10 +160,69 @@ function buildKimiArgs(opts, prompt) {
   return args;
 }
 
-function appendLimited(current, chunk) {
-  if (current.length >= MAX_CAPTURE_CHARS) return current;
+function appendTailLimited(current, chunk) {
   const next = current + chunk;
-  return next.length > MAX_CAPTURE_CHARS ? next.slice(0, MAX_CAPTURE_CHARS) : next;
+  return next.length > MAX_CAPTURE_CHARS ? next.slice(next.length - MAX_CAPTURE_CHARS) : next;
+}
+
+function createKimiStreamParser() {
+  const parsed = {
+    assistant: [],
+    toolCalls: [],
+    toolResults: [],
+    parseErrors: [],
+    resumeHint: undefined,
+  };
+  let pending = '';
+
+  function parseLine(rawLine) {
+    const line = rawLine.trim();
+    if (line.length === 0) return;
+
+    let message;
+    try {
+      message = JSON.parse(line);
+    } catch (error) {
+      parsed.parseErrors.push(line.slice(0, 500));
+      return;
+    }
+
+    if (message.role === 'assistant') {
+      if (typeof message.content === 'string' && message.content.trim().length > 0) {
+        parsed.assistant.push(message.content.trim());
+      }
+      if (Array.isArray(message.tool_calls)) {
+        for (const call of message.tool_calls) {
+          const name = call?.function?.name;
+          parsed.toolCalls.push(typeof name === 'string' && name.length > 0 ? name : '(unknown)');
+        }
+      }
+      return;
+    }
+
+    if (message.role === 'tool') {
+      parsed.toolResults.push(String(message.content ?? '').slice(0, 500));
+      return;
+    }
+
+    if (message.role === 'meta' && message.type === 'session.resume_hint') {
+      parsed.resumeHint = message;
+    }
+  }
+
+  return {
+    ingest(chunk) {
+      pending += chunk;
+      const lines = pending.split(/\r?\n/);
+      pending = lines.pop() ?? '';
+      for (const line of lines) parseLine(line);
+    },
+    finish() {
+      parseLine(pending);
+      pending = '';
+      return parsed;
+    },
+  };
 }
 
 function runProcess(command, args, opts = {}) {
@@ -177,6 +236,7 @@ function runProcess(command, args, opts = {}) {
     let stdout = '';
     let stderr = '';
     let timedOut = false;
+    const stdoutParser = opts.parseStdout ? createKimiStreamParser() : undefined;
 
     let teeStream;
     if (opts.teePath) {
@@ -197,61 +257,28 @@ function runProcess(command, args, opts = {}) {
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
     child.stdout.on('data', chunk => {
-      stdout = appendLimited(stdout, chunk);
+      stdout = appendTailLimited(stdout, chunk);
+      stdoutParser?.ingest(chunk);
       if (teeStream) teeStream.write(chunk);
     });
     child.stderr.on('data', chunk => {
-      stderr = appendLimited(stderr, chunk);
+      stderr = appendTailLimited(stderr, chunk);
     });
     child.on('error', reject);
     child.on('close', (code, signal) => {
       clearTimeout(timer);
       if (teeStream) teeStream.end();
-      resolve({ code, signal, stdout, stderr, timedOut });
+      resolve({ code, signal, stdout, stderr, timedOut, parsed: stdoutParser?.finish() });
     });
   });
 }
 
 function parseKimiStreamJson(stdout) {
-  const assistant = [];
-  const toolCalls = [];
-  const toolResults = [];
-  const parseErrors = [];
-  let resumeHint = undefined;
-
+  const parser = createKimiStreamParser();
   for (const rawLine of stdout.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (line.length === 0) continue;
-    let message;
-    try {
-      message = JSON.parse(line);
-    } catch (error) {
-      parseErrors.push(line);
-      continue;
-    }
-
-    if (message.role === 'assistant') {
-      if (typeof message.content === 'string' && message.content.trim().length > 0) {
-        assistant.push(message.content.trim());
-      }
-      if (Array.isArray(message.tool_calls)) {
-        for (const call of message.tool_calls) {
-          const name = call?.function?.name;
-          toolCalls.push(typeof name === 'string' && name.length > 0 ? name : '(unknown)');
-        }
-      }
-      continue;
-    }
-    if (message.role === 'tool') {
-      toolResults.push(String(message.content ?? '').slice(0, 500));
-      continue;
-    }
-    if (message.role === 'meta' && message.type === 'session.resume_hint') {
-      resumeHint = message;
-    }
+    parser.ingest(`${rawLine}\n`);
   }
-
-  return { assistant, toolCalls, toolResults, parseErrors, resumeHint };
+  return parser.finish();
 }
 
 function unique(items) {
@@ -326,6 +353,7 @@ async function main() {
     cwd: opts.cwd,
     timeoutSeconds: opts.timeoutSeconds,
     teePath: opts.tee,
+    parseStdout: true,
   });
   if (result.timedOut) {
     console.error(`Kimi Code timed out after ${opts.timeoutSeconds} seconds.`);
@@ -347,7 +375,7 @@ async function main() {
     process.exit(result.code ?? 1);
   }
 
-  const parsed = parseKimiStreamJson(result.stdout);
+  const parsed = result.parsed ?? parseKimiStreamJson(result.stdout);
   printSuccessfulRun(parsed);
 }
 
