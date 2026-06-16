@@ -32,17 +32,20 @@ The bundled `bin/kimi-agent-run` helper spawns Kimi in headless prompt mode, par
 
 ## Install
 
-This repository is a single-plugin Claude Code marketplace. Install from a local clone:
+This repository is a single-plugin Claude Code marketplace. Add it straight from
+GitHub and install the plugin — no clone needed:
 
 ```sh
-git clone https://github.com/rrva/claude-code-kimi-agent
-claude plugin marketplace add ./claude-code-kimi-agent
+claude plugin marketplace add rrva/claude-code-kimi-agent
 claude plugin install kimi-code-agent@kimi-code
 ```
 
-Or load it for one session only, without installing:
+### Develop locally
+
+Clone it and load it for a single session without installing:
 
 ```sh
+git clone https://github.com/rrva/claude-code-kimi-agent
 claude --plugin-dir ./claude-code-kimi-agent
 ```
 
