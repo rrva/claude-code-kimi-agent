@@ -1,0 +1,27 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "kimi-code",
+  "owner": {
+    "name": "Moonshot AI"
+  },
+  "metadata": {
+    "description": "Claude Code plugins for Kimi Code.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "kimi-code-agent",
+      "source": "./",
+      "description": "Run Kimi Code CLI as a Claude Code plugin subagent through the official Kimi CLI.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Moonshot AI"
+      },
+      "homepage": "https://github.com/MoonshotAI/kimi-code",
+      "repository": "https://github.com/MoonshotAI/kimi-code",
+      "license": "MIT",
+      "category": "development",
+      "keywords": ["kimi", "kimi-code", "agent", "subagent", "coding-agent"]
+    }
+  ]
+}
