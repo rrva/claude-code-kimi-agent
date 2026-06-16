@@ -76,3 +76,26 @@ bin/kimi-agent-run --continue <<'KIMI_TASK'
 Continue with the next step.
 KIMI_TASK
 ```
+
+## Watch a run live
+
+`kimi -p` is non-interactive, so by default you only see the final summary.
+Use `--tee <path>` to mirror Kimi's live `stream-json` to a file as it runs,
+and `tail -f` that file in another terminal to watch tool calls and output in
+real time. This is a side channel for you — the captured summary returned to
+Claude Code is unchanged.
+
+```sh
+# terminal A
+bin/kimi-agent-run --tee /tmp/kimi.jsonl <<'KIMI_TASK'
+Explore this repository and summarize its architecture.
+KIMI_TASK
+```
+
+```sh
+# terminal B
+tail -f /tmp/kimi.jsonl
+```
+
+`--live` is a shorthand that tees to a temp file and prints the `tail -f`
+command to use.

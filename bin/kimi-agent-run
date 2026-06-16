@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
 import { spawn } from 'node:child_process';
+import { createWriteStream } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join as joinPath } from 'node:path';
 import { stdin as processStdin } from 'node:process';
 
 const DEFAULT_TIMEOUT_SECONDS = 1800;
@@ -24,6 +27,9 @@ Options:
   --timeout-seconds <n>       Timeout before terminating Kimi. Default: ${DEFAULT_TIMEOUT_SECONDS}.
   --kimi-bin <path>           Kimi executable. Default: kimi.
   --dry-run                   Print the resolved Kimi command without running it.
+  --tee <path>                Mirror Kimi's live stream-json to <path> as it runs.
+                              Watch it with: tail -f <path>
+  --live                      Like --tee but to a temp file; prints the tail command.
   --help                      Show this help.
 `;
 }
@@ -39,6 +45,8 @@ function parseArgs(argv) {
     worktree: undefined,
     cwd: process.cwd(),
     dryRun: false,
+    tee: undefined,
+    live: false,
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -75,6 +83,14 @@ function parseArgs(argv) {
       opts.kimiBin = requireValue(argv, ++i, arg);
       continue;
     }
+    if (arg === '--tee') {
+      opts.tee = requireValue(argv, ++i, arg);
+      continue;
+    }
+    if (arg === '--live') {
+      opts.live = true;
+      continue;
+    }
     if (arg === '--timeout-seconds') {
       const raw = requireValue(argv, ++i, arg);
       const parsed = Number(raw);
@@ -106,6 +122,9 @@ function parseArgs(argv) {
   }
   if (opts.worktree !== undefined && (opts.continue || opts.session !== undefined)) {
     throw new Error('Cannot combine --worktree with --continue or --session.');
+  }
+  if (opts.live && opts.tee === undefined) {
+    opts.tee = joinPath(tmpdir(), `kimi-agent-${process.pid}.jsonl`);
   }
   return opts;
 }
@@ -158,6 +177,16 @@ function runProcess(command, args, opts = {}) {
     let stdout = '';
     let stderr = '';
     let timedOut = false;
+
+    let teeStream;
+    if (opts.teePath) {
+      teeStream = createWriteStream(opts.teePath, { encoding: 'utf8' });
+      teeStream.on('error', error => {
+        process.stderr.write(`Live tee to ${opts.teePath} failed: ${error.message}\n`);
+        teeStream = undefined;
+      });
+    }
+
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill('SIGTERM');
@@ -169,6 +198,7 @@ function runProcess(command, args, opts = {}) {
     child.stderr.setEncoding('utf8');
     child.stdout.on('data', chunk => {
       stdout = appendLimited(stdout, chunk);
+      if (teeStream) teeStream.write(chunk);
     });
     child.stderr.on('data', chunk => {
       stderr = appendLimited(stderr, chunk);
@@ -176,6 +206,7 @@ function runProcess(command, args, opts = {}) {
     child.on('error', reject);
     child.on('close', (code, signal) => {
       clearTimeout(timer);
+      if (teeStream) teeStream.end();
       resolve({ code, signal, stdout, stderr, timedOut });
     });
   });
@@ -271,6 +302,7 @@ async function main() {
       args: kimiArgs.map(arg => (arg === prompt ? `<prompt:${prompt.length} chars>` : arg)),
       cwd: opts.cwd,
       timeoutSeconds: opts.timeoutSeconds,
+      tee: opts.tee ?? null,
     }, null, 2));
     return;
   }
@@ -287,9 +319,13 @@ async function main() {
     );
   }
 
+  if (opts.tee) {
+    console.error(`Live feed: tail -f ${opts.tee}`);
+  }
   const result = await runProcess(opts.kimiBin, kimiArgs, {
     cwd: opts.cwd,
     timeoutSeconds: opts.timeoutSeconds,
+    teePath: opts.tee,
   });
   if (result.timedOut) {
     console.error(`Kimi Code timed out after ${opts.timeoutSeconds} seconds.`);
