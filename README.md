@@ -12,18 +12,6 @@ Built entirely on official surfaces — no host-file edits, no forks:
 - Kimi Code CLI non-interactive prompt mode: `kimi -p "<task>" --output-format stream-json`
 - Kimi resume flags: `--continue`, `--session`
 
-## How it works
-
-```
-Claude Code
-  └─ skill: kimi   ── or ──   subagent: kimi-code-agent:kimi-code
-       └─ Bash → bin/kimi-agent-run
-            └─ kimi -p "<task>" --output-format stream-json
-                 └─ parsed → Kimi's response + session id + resume command
-```
-
-The bundled `bin/kimi-agent-run` helper spawns Kimi in headless prompt mode, parses its streaming `stream-json` output, and returns a concise summary. Claude never drives Kimi interactively — it delegates a task and gets a result back.
-
 ## Requirements
 
 - **Kimi Code CLI** on `PATH`, authenticated:
@@ -75,6 +63,18 @@ The helper prints a session id and a resume command after each run, so you can c
 ```text
 Continue the previous kimi session and add tests for the change.
 ```
+
+## How it works
+
+```
+Claude Code
+  └─ skill: kimi   ── or ──   subagent: kimi-code-agent:kimi-code
+       └─ Bash → bin/kimi-agent-run
+            └─ kimi -p "<task>" --output-format stream-json
+                 └─ parsed → Kimi's response + session id + resume command
+```
+
+The bundled `bin/kimi-agent-run` helper spawns Kimi in headless prompt mode, parses its streaming `stream-json` output, and returns a concise summary. Claude never drives Kimi interactively — it delegates a task and gets a result back.
 
 ## Watch a run live
 
