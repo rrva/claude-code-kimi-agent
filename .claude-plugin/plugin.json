@@ -1,6 +1,6 @@
 {
   "name": "kimi-code-agent",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Run Kimi Code CLI as a Claude Code plugin subagent through the official Kimi CLI.",
   "author": {
     "name": "Ragnar Rova"

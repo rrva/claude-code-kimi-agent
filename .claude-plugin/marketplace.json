@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "Claude Code plugins for Kimi Code.",
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "plugins": [
     {
       "name": "kimi-code-agent",
       "source": "./",
       "description": "Run Kimi Code CLI as a Claude Code plugin subagent through the official Kimi CLI.",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "author": {
         "name": "Ragnar Rova"
       },
