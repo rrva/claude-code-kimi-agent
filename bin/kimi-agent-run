@@ -30,6 +30,14 @@ Options:
   --tee <path>                Mirror Kimi's live stream-json to <path> as it runs.
                               Watch it with: tail -f <path>
   --live                      Like --tee but to a temp file; prints the tail command.
+  --verify <cmd>              Shell check run after Kimi (in --cwd). On failure,
+                              Kimi is re-invoked with --continue to fix it, up to
+                              --max-iters times. Exit 2 if still failing.
+                              Cannot be combined with --worktree.
+  --max-iters <n>             Max Kimi attempts when --verify is set. Default: 1
+                              (run once, report verify status; no auto-fix loop).
+                              --timeout-seconds applies per sub-process (each
+                              Kimi run and each verify run), not as a total cap.
   --help                      Show this help.
 `;
 }
@@ -47,6 +55,8 @@ function parseArgs(argv) {
     dryRun: false,
     tee: undefined,
     live: false,
+    verify: undefined,
+    maxIters: 1,
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -91,6 +101,19 @@ function parseArgs(argv) {
       opts.live = true;
       continue;
     }
+    if (arg === '--verify') {
+      opts.verify = requireValue(argv, ++i, arg);
+      continue;
+    }
+    if (arg === '--max-iters') {
+      const raw = requireValue(argv, ++i, arg);
+      const parsed = Number(raw);
+      if (!Number.isInteger(parsed) || parsed < 1) {
+        throw new Error(`Invalid --max-iters value: ${raw} (must be an integer >= 1).`);
+      }
+      opts.maxIters = parsed;
+      continue;
+    }
     if (arg === '--timeout-seconds') {
       const raw = requireValue(argv, ++i, arg);
       const parsed = Number(raw);
@@ -122,6 +145,12 @@ function parseArgs(argv) {
   }
   if (opts.worktree !== undefined && (opts.continue || opts.session !== undefined)) {
     throw new Error('Cannot combine --worktree with --continue or --session.');
+  }
+  if (opts.verify !== undefined && opts.worktree !== undefined) {
+    throw new Error(
+      'Cannot combine --verify with --worktree: --verify runs in the working ' +
+        "directory, but --worktree isolates Kimi's changes in a separate worktree.",
+    );
   }
   if (opts.live && opts.tee === undefined) {
     opts.tee = joinPath(tmpdir(), `kimi-agent-${process.pid}.jsonl`);
@@ -240,11 +269,20 @@ function runProcess(command, args, opts = {}) {
 
     let teeStream;
     if (opts.teePath) {
-      teeStream = createWriteStream(opts.teePath, { encoding: 'utf8' });
+      // Append (not truncate) when re-invoked in the verify fix loop so each
+      // attempt's stream is kept instead of clobbering the previous one; the
+      // separator keeps the attempts readable. The initial run truncates.
+      teeStream = createWriteStream(opts.teePath, {
+        encoding: 'utf8',
+        flags: opts.teeAppend ? 'a' : 'w',
+      });
       teeStream.on('error', error => {
         process.stderr.write(`Live tee to ${opts.teePath} failed: ${error.message}\n`);
         teeStream = undefined;
       });
+      if (opts.teeAppend && teeStream) {
+        teeStream.write('\n--- kimi --continue (fix) ---\n');
+      }
     }
 
     const timer = setTimeout(() => {
@@ -288,6 +326,94 @@ function unique(items) {
 function tail(text, maxChars = 4000) {
   if (text.length <= maxChars) return text;
   return text.slice(text.length - maxChars);
+}
+
+function runShell(cmd, cwd, timeoutSeconds) {
+  return runProcess('sh', ['-c', cmd], { cwd, timeoutSeconds }).then(r => ({
+    code: r.code,
+    timedOut: r.timedOut,
+    output: [r.stdout, r.stderr].filter(s => s && s.trim().length > 0).join('\n'),
+  }));
+}
+
+async function gitText(cwd, args) {
+  const r = await runProcess('git', args, { cwd, timeoutSeconds: 30 }).catch(() => null);
+  if (r === null || r.code !== 0) return null;
+  return r.stdout.replace(/\s+$/, '');
+}
+
+// #2: a git snapshot of the work directory so the caller can verify what
+// actually changed (and whether Kimi committed) instead of trusting prose.
+async function gitSummary(opts) {
+  const inside = await gitText(opts.cwd, ['rev-parse', '--is-inside-work-tree']);
+  if (inside !== 'true') return null;
+  if (opts.worktree !== undefined) {
+    const list = await gitText(opts.cwd, ['worktree', 'list']);
+    const note =
+      'Kimi was asked to work in a NEW git worktree — its changes are not in ' +
+      'this directory. Inspect the worktree below.';
+    return list ? `${note}\n\ngit worktree list:\n${list}` : note;
+  }
+  const status = await gitText(opts.cwd, ['status', '--porcelain']);
+  const stat = await gitText(opts.cwd, ['--no-pager', 'diff', '--stat', 'HEAD']);
+  const log = await gitText(opts.cwd, ['--no-pager', 'log', '--oneline', '-5']);
+  const parts = [
+    `Uncommitted changes (git status --porcelain):\n${status && status.length > 0 ? status : '(clean)'}`,
+  ];
+  if (stat && stat.length > 0) parts.push(`Working tree vs HEAD (git diff --stat HEAD):\n${stat}`);
+  if (log) parts.push(`Recent commits (git log --oneline -5):\n${log}`);
+  return parts.join('\n\n');
+}
+
+function buildContinueArgs(opts, prompt) {
+  // --session is intentionally NOT re-passed: after the initial run there is a
+  // "most recent session" for the cwd, so --continue resumes exactly it (and
+  // Kimi rejects --session together with --continue).
+  const args = ['--continue'];
+  if (opts.model !== undefined) args.push('--model', opts.model);
+  args.push('--prompt', prompt, '--output-format', 'stream-json');
+  return args;
+}
+
+function buildFixPrompt(verifyCmd, output) {
+  return [
+    `The verification command \`${verifyCmd}\` is still failing after your last changes.`,
+    'Fix the root cause so the command passes. Do not commit unless it succeeds.',
+    '',
+    'Command output (tail):',
+    tail(output, 3000),
+  ].join('\n');
+}
+
+// #1: run --verify in the work dir; on failure, re-invoke Kimi with
+// --continue (feeding the failure back) up to --max-iters total attempts.
+async function runVerifyLoop(opts) {
+  let attempts = 1; // the initial Kimi run already happened
+  let verify = await runShell(opts.verify, opts.cwd, opts.timeoutSeconds);
+  while (verify.code !== 0 && attempts < opts.maxIters) {
+    attempts += 1;
+    process.stderr.write(`Verify failed; Kimi fix attempt ${attempts}/${opts.maxIters}...\n`);
+    const fix = await runProcess(
+      opts.kimiBin,
+      buildContinueArgs(opts, buildFixPrompt(opts.verify, verify.output)),
+      {
+        cwd: opts.cwd,
+        timeoutSeconds: opts.timeoutSeconds,
+        teePath: opts.tee,
+        teeAppend: true,
+        parseStdout: true,
+      },
+    );
+    if (fix.timedOut || fix.code !== 0) {
+      return {
+        passed: false,
+        attempts,
+        lastOutput: `Kimi --continue ${fix.timedOut ? 'timed out' : `exited ${fix.code}`}.\n${tail(fix.stderr || fix.stdout, 1500)}`,
+      };
+    }
+    verify = await runShell(opts.verify, opts.cwd, opts.timeoutSeconds);
+  }
+  return { passed: verify.code === 0, attempts, lastOutput: verify.output };
 }
 
 function printSuccessfulRun(parsed) {
@@ -377,6 +503,32 @@ async function main() {
 
   const parsed = result.parsed ?? parseKimiStreamJson(result.stdout);
   printSuccessfulRun(parsed);
+
+  let verifyOutcome;
+  if (opts.verify !== undefined) {
+    verifyOutcome = await runVerifyLoop(opts);
+    console.log('');
+    console.log(`--- verify: ${opts.verify} ---`);
+    if (verifyOutcome.passed) {
+      console.log(`PASS (after ${verifyOutcome.attempts} Kimi attempt(s)).`);
+    } else {
+      console.log(
+        `FAIL (after ${verifyOutcome.attempts} Kimi attempt(s), max ${opts.maxIters}). Last output (tail):`,
+      );
+      console.log(tail(verifyOutcome.lastOutput, 2000));
+    }
+  }
+
+  const summary = await gitSummary(opts);
+  if (summary !== null) {
+    console.log('');
+    console.log('--- repository state ---');
+    console.log(summary);
+  }
+
+  if (verifyOutcome && !verifyOutcome.passed) {
+    process.exit(2);
+  }
 }
 
 main().catch(error => {

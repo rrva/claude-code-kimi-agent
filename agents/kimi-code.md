@@ -20,15 +20,31 @@ Use the official Kimi Code CLI prompt mode only. The helper runs:
 
 Do not add `--yolo`, `--auto`, or `--plan` to prompt-mode runs. Kimi prompt mode already runs with auto permission — every file, shell, and network action is auto-approved with no prompt — so there is nothing to escalate, and `kimi -p` rejects those flags (exit 1). This holds regardless of the parent Claude Code session's permission mode, including bypass-permissions; there is no yolo level above prompt-mode auto to switch into.
 
-Invocation pattern:
+## Invocation
+
+Each `kimi -p` run is ONE non-interactive pass — Kimi does a bounded chunk and exits. Scope each run to a single self-contained, verifiable unit, and pick one of two strategies.
+
+**A. Self-verifying** (recommended for "implement X and make the checks pass"). Run in the working tree and pass `--verify` with the project's real check command plus `--max-iters` so Kimi loops to green on its own instead of needing repeated nudges:
 
 ```sh
-kimi-agent-run --timeout-seconds 1800 <<'KIMI_TASK'
+kimi-agent-run --verify 'npm run typecheck && npm test' --max-iters 4 --timeout-seconds 1800 <<'KIMI_TASK'
+<the complete, single-unit task — and: only commit if the verify command passes; never commit red>
+KIMI_TASK
+```
+
+The helper runs `--verify` in `--cwd` after Kimi; on failure it re-invokes Kimi with `--continue` (feeding the failing output back) up to `--max-iters` total attempts, and exits non-zero (2) if still failing. Use the exact command the project's CI runs.
+
+**B. Isolated** (recommended for larger or parallel work). For a NEW implementation session, default to `--worktree` so Kimi's edits land in a throwaway git worktree and cannot race other work in the main checkout:
+
+```sh
+kimi-agent-run --worktree --timeout-seconds 1800 <<'KIMI_TASK'
 <the complete task for Kimi Code>
 KIMI_TASK
 ```
 
-If the user asks to continue the most recent Kimi session in this working directory:
+The helper reports the worktree (`git worktree list`) so the caller can review, test, merge, or remove it. `--verify` and `--worktree` cannot be combined — `--verify` checks the working tree; the worktree is separate.
+
+**Continue / resume** the most recent session in the same working tree (do NOT add `--worktree`):
 
 ```sh
 kimi-agent-run --continue --timeout-seconds 1800 <<'KIMI_TASK'
@@ -36,7 +52,7 @@ kimi-agent-run --continue --timeout-seconds 1800 <<'KIMI_TASK'
 KIMI_TASK
 ```
 
-If the user gives a Kimi session id:
+Or resume a specific session id:
 
 ```sh
 kimi-agent-run --session <session-id> --timeout-seconds 1800 <<'KIMI_TASK'
@@ -44,4 +60,6 @@ kimi-agent-run --session <session-id> --timeout-seconds 1800 <<'KIMI_TASK'
 KIMI_TASK
 ```
 
-Return a concise summary of Kimi's result. Include any resume command or session id shown by the helper. If Kimi is not installed, not logged in, or has no model configured, report that directly and include the setup command `kimi login`.
+In the task you hand Kimi, state the definition of done and the commit policy explicitly ("run `<check>`; commit only when it passes; never commit red"). Do not edit or test the repository yourself while a run is in flight.
+
+Return a concise summary of Kimi's result. Include the helper's `verify:` status and the `repository state` block (changed files, recent commits, or worktree location) so the caller sees what actually happened — not just Kimi's prose — plus any resume command or session id. If the verify gate ended in FAIL (helper exit 2), say so plainly. If Kimi is not installed, not logged in, or has no model configured, report that directly and include the setup command `kimi login`.
