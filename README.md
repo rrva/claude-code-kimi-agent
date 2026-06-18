@@ -11,6 +11,7 @@ Built on:
 - Claude Code plugins, skills, and subagents
 - Kimi Code CLI non-interactive prompt mode: `kimi -p "<task>" --output-format stream-json`
 - Kimi resume flags: `--continue`, `--session`
+- An optional `--verify` loop so Kimi iterates to a passing check on its own
 
 ## Requirements
 
@@ -93,6 +94,20 @@ tail -f /tmp/kimi.jsonl
 
 `--live` is a shorthand that tees to a temp file and prints the `tail -f` command.
 
+## Verify and inspect runs
+
+`kimi -p` is one non-interactive pass, so a task that needs iteration normally takes several nudges. Pass `--verify` with your project's check command and `--max-iters` to make Kimi loop to green on its own:
+
+```sh
+bin/kimi-agent-run --verify 'npm run typecheck && npm test' --max-iters 4 <<'KIMI_TASK'
+Implement <the change>. Only commit if the verify command passes; never commit red.
+KIMI_TASK
+```
+
+After Kimi finishes, the helper runs `--verify` in the working directory. If it fails and attempts remain, Kimi is re-invoked with `--continue` (the failing output fed back in), up to `--max-iters` **total** attempts. The helper prints `PASS`/`FAIL` and exits non-zero (`2`) when the check is still failing — so Claude knows the work isn't done. Use the exact command your CI runs. (`--verify` and `--worktree` are mutually exclusive: one checks the working tree, the other isolates changes in a separate worktree.)
+
+Every run also ends with a **repository state** block — `git status --porcelain`, `git diff --stat HEAD`, and the latest commits (or `git worktree list` for a `--worktree` run) — so you can see what Kimi actually changed and whether it committed, instead of trusting the prose summary.
+
 ## Helper reference
 
 `bin/kimi-agent-run` runs Kimi's official non-interactive prompt mode. The prompt comes from stdin or `--prompt`.
@@ -107,7 +122,9 @@ tail -f /tmp/kimi.jsonl
 | `--cwd <path>` | Working directory for the Kimi process. |
 | `--tee <path>` | Mirror live `stream-json` to `<path>` (watch with `tail -f`). |
 | `--live` | Like `--tee` but to a temp file; prints the tail command. |
-| `--timeout-seconds <n>` | Timeout before terminating Kimi. Default: 1800. |
+| `--verify <cmd>` | Shell check run after Kimi (in `--cwd`). On failure, Kimi re-runs with `--continue` to fix it, up to `--max-iters` times; exit `2` if still failing. Not combinable with `--worktree`. |
+| `--max-iters <n>` | Max Kimi attempts when `--verify` is set. Default: `1` (run once, no fix loop). |
+| `--timeout-seconds <n>` | Timeout before terminating Kimi (per sub-process). Default: 1800. |
 | `--kimi-bin <path>` | Kimi executable. Default: `kimi`. |
 | `--dry-run` | Print the resolved Kimi command without running it. |
 
