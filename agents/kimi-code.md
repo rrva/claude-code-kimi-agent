@@ -44,6 +44,18 @@ KIMI_TASK
 
 The helper reports the worktree (`git worktree list`) so the caller can review, test, merge, or remove it. `--verify` and `--worktree` cannot be combined — `--verify` checks the working tree; the worktree is separate.
 
+**C. Read-only investigation** (for "explore / summarize / review / audit — do NOT change the repo"). Kimi prompt mode has NO native read-only mode (it auto-approves every write; `--plan` is rejected with `-p`), so "don't modify code" in the prompt alone is unenforceable. Use `--readonly`: the helper snapshots git HEAD + status before the run and FAILS (exit 3) if Kimi mutated tracked state. Give the deliverable a writable home OUTSIDE the repo with `--add-dir`, and have the task write there:
+
+```sh
+mkdir -p /tmp/kimi-out
+kimi-agent-run --readonly --add-dir /tmp/kimi-out --timeout-seconds 1800 <<'KIMI_TASK'
+<the investigation>. Do NOT modify any file in the repository. Write your
+deliverable to /tmp/kimi-out/<name>.md and nothing else.
+KIMI_TASK
+```
+
+Each `kimi -p` is ONE bounded pass that exits, so a task that explores AND writes can run out of pass before writing. For read-only/summary work, tell Kimi to **write the deliverable file FIRST (even a stub), then refine it** — a truncated pass still leaves the artifact. Scope each run to a single file/area; fan out multiple runs for breadth rather than one giant pass. After the run, check the helper's `read-only enforcement` line: FAIL (helper exit 3) means Kimi breached read-only — report it loudly and do not trust the output until reverted.
+
 **Continue / resume** the most recent session in the same working tree (do NOT add `--worktree`):
 
 ```sh

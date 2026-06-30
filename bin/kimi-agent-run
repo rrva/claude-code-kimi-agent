@@ -30,6 +30,15 @@ Options:
   --tee <path>                Mirror Kimi's live stream-json to <path> as it runs.
                               Watch it with: tail -f <path>
   --live                      Like --tee but to a temp file; prints the tail command.
+  --readonly                  For investigation/summary tasks: snapshot git HEAD +
+                              status before the run and FAIL (exit 3) if Kimi
+                              mutated tracked repo state. Kimi prompt mode has no
+                              native read-only mode, so this enforces it out here.
+                              Cannot combine with --worktree or --verify. Pair with
+                              --add-dir for a writable output location.
+  --add-dir <path>            Add an extra workspace directory Kimi may read/write
+                              (repeatable). Use it to give a read-only run a place
+                              to write its deliverable outside the repo.
   --verify <cmd>              Shell check run after Kimi (in --cwd). On failure,
                               Kimi is re-invoked with --continue to fix it, up to
                               --max-iters times. Exit 2 if still failing.
@@ -57,6 +66,8 @@ function parseArgs(argv) {
     live: false,
     verify: undefined,
     maxIters: 1,
+    readonly: false,
+    addDir: [],
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -99,6 +110,14 @@ function parseArgs(argv) {
     }
     if (arg === '--live') {
       opts.live = true;
+      continue;
+    }
+    if (arg === '--readonly' || arg === '--read-only') {
+      opts.readonly = true;
+      continue;
+    }
+    if (arg === '--add-dir') {
+      opts.addDir.push(requireValue(argv, ++i, arg));
       continue;
     }
     if (arg === '--verify') {
@@ -152,6 +171,18 @@ function parseArgs(argv) {
         "directory, but --worktree isolates Kimi's changes in a separate worktree.",
     );
   }
+  if (opts.readonly && opts.worktree !== undefined) {
+    throw new Error(
+      'Cannot combine --readonly with --worktree: a worktree is for landing ' +
+        'changes, --readonly forbids them.',
+    );
+  }
+  if (opts.readonly && opts.verify !== undefined) {
+    throw new Error(
+      'Cannot combine --readonly with --verify: the verify fix-loop edits the ' +
+        'tree, which --readonly forbids.',
+    );
+  }
   if (opts.live && opts.tee === undefined) {
     opts.tee = joinPath(tmpdir(), `kimi-agent-${process.pid}.jsonl`);
   }
@@ -185,6 +216,7 @@ function buildKimiArgs(opts, prompt) {
   if (opts.model !== undefined) args.push('--model', opts.model);
   if (opts.worktree === true) args.push('--worktree');
   if (typeof opts.worktree === 'string') args.push(`--worktree=${opts.worktree}`);
+  for (const dir of opts.addDir) args.push('--add-dir', dir);
   args.push('--prompt', prompt, '--output-format', 'stream-json');
   return args;
 }
@@ -365,6 +397,32 @@ async function gitSummary(opts) {
   return parts.join('\n\n');
 }
 
+// A read-only delegation: Kimi prompt mode has NO native read-only/tool-restrict
+// mode (the CLI rejects --plan/--auto/--yolo with -p and always auto-approves
+// writes), so "do not modify the repo" is unenforceable in the prompt and a model
+// can ignore it. We enforce it OUT here instead: snapshot HEAD + porcelain status
+// before the run, compare after, and FAIL the run if Kimi mutated tracked state.
+// `addDir` paths are allowed to change (that is where the deliverable is written).
+async function readonlySnapshot(opts) {
+  const inside = await gitText(opts.cwd, ['rev-parse', '--is-inside-work-tree']);
+  if (inside !== 'true') return null;
+  const head = await gitText(opts.cwd, ['rev-parse', 'HEAD']);
+  const status = await gitText(opts.cwd, ['status', '--porcelain']);
+  return { head: head ?? '', status: status ?? '' };
+}
+
+function readonlyViolation(before, after) {
+  if (before === null || after === null) return null;
+  const reasons = [];
+  if (before.head !== after.head) {
+    reasons.push(`HEAD moved (${before.head.slice(0, 8)} -> ${after.head.slice(0, 8)}): Kimi committed.`);
+  }
+  if (before.status !== after.status) {
+    reasons.push('Working tree changed (git status --porcelain differs): Kimi edited tracked files.');
+  }
+  return reasons.length > 0 ? reasons.join('\n') : null;
+}
+
 function buildContinueArgs(opts, prompt) {
   // --session is intentionally NOT re-passed: after the initial run there is a
   // "most recent session" for the cwd, so --continue resumes exactly it (and
@@ -475,6 +533,7 @@ async function main() {
   if (opts.tee) {
     console.error(`Live feed: tail -f ${opts.tee}`);
   }
+  const readonlyBefore = opts.readonly ? await readonlySnapshot(opts) : null;
   const result = await runProcess(opts.kimiBin, kimiArgs, {
     cwd: opts.cwd,
     timeoutSeconds: opts.timeoutSeconds,
@@ -526,8 +585,26 @@ async function main() {
     console.log(summary);
   }
 
+  let readonlyBreach = null;
+  if (opts.readonly) {
+    const after = await readonlySnapshot(opts);
+    readonlyBreach = readonlyViolation(readonlyBefore, after);
+    console.log('');
+    console.log('--- read-only enforcement ---');
+    if (readonlyBreach === null) {
+      console.log('PASS: Kimi made no changes to tracked repo state.');
+    } else {
+      console.log('FAIL: --readonly was requested but the repo was mutated:');
+      console.log(readonlyBreach);
+      console.log('Review and revert (e.g. `git checkout -- .` / `git reset`) before trusting output.');
+    }
+  }
+
   if (verifyOutcome && !verifyOutcome.passed) {
     process.exit(2);
+  }
+  if (readonlyBreach !== null) {
+    process.exit(3);
   }
 }
 
