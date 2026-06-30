@@ -52,6 +52,6 @@
     <circle class="dotL b2" cx="582" cy="170" r="4"/>
   </g>
 
-  <text class="mono" x="72" y="223" font-size="14" fill="#cdd6f0">$ kimi <tspan fill="#7c8cf8">-p</tspan> <tspan fill="#86d2a8">"review the current diff"</tspan></text>
-  <rect class="cursor" x="362" y="212" width="8" height="13" fill="#86d2a8"/>
+  <text class="mono" x="72" y="223" font-size="14" fill="#cdd6f0">$ <tspan fill="#86d2a8">use kimi subagents for this</tspan></text>
+  <rect class="cursor" x="332" y="212" width="8" height="13" fill="#86d2a8"/>
 </svg>

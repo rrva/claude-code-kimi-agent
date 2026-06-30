@@ -1,6 +1,6 @@
 {
   "name": "claude-code-kimi-agent",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "Claude Code plugin that delegates coding tasks to the Kimi Code CLI as a subagent.",
   "type": "module",
   "private": true,
